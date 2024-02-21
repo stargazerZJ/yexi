@@ -6,7 +6,9 @@
 **Important Note**: This module requires `pytorch` to be installed, which is a huge library. Be sure to have enough space and time to install it.
 
 ## Installation
-- Clone the repository and copy the `yexi` folder to your project.
+- Clone the repository.
+- Install the required packages by running `pip install -r requirements.txt`.
+- Copy the `yexi` folder to your project.
 
 ## Usage
 ```python
