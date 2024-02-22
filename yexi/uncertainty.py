@@ -22,14 +22,14 @@ def margin_of_error(value : np.array) -> float:
 	'''calculate Margin of Error (the uncertainty associated with random error), using the t-distribution'''
 	return scipy.stats.t.ppf((1 + confidence) / 2, len(value) - 1) * np.std(value, ddof=1) / np.sqrt(len(value))
 
-def measure(value : np.array, tolerance=0) -> Value:
+def measure(value : np.array, tolerance=0, factor=1, intercept=0) -> Value:
 	'''measure a value with uncertainty, assuming the data is uniformly distributed within the tolerance'''
 	systematic_error = tolerance * confidence
 	if hasattr(value, '__len__'):
 		ME = margin_of_error(value)
-		return Value(np.mean(value), np.sqrt(ME**2 + systematic_error**2))
+		return Value((np.mean(value) - intercept) * factor, np.sqrt(ME**2 + systematic_error**2) * factor)
 	else:
-		return Value(value, systematic_error)
+		return Value((value - intercept) * factor, systematic_error * factor)
 
 def calc(f, *args : float | Value) -> Value:
     '''calculate a function with uncertainty, using torch'''
