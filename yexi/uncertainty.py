@@ -32,16 +32,25 @@ def measure(value : np.array, tolerance=0, factor=1, intercept=0) -> Value:
 		return Value((value - intercept) * factor, systematic_error * factor)
 
 def calc(f, *args : float | Value) -> Value:
-    '''calculate a function with uncertainty, using torch'''
-    # Convert all arguments to torch tensors
-    values = [torch.tensor(arg.value if isinstance(arg, Value) else float(arg), requires_grad=True) for arg in args]
-    uncertainties = [torch.tensor(arg.uncertainty if isinstance(arg, Value) else 0) for arg in args]
+	'''calculate a function with uncertainty, using torch'''
+	# Convert all arguments to torch tensors
+	values = [
+		torch.tensor(
+			arg.value if isinstance(arg, Value) else arg,
+			requires_grad=True,
+			dtype=float
+		)
+		for arg in args
+	]
+	uncertainties = [torch.tensor(arg.uncertainty if isinstance(arg, Value) else 0) for arg in args]
 
-    # Calculate the function value
-    value : torch.Tensor = f(*values)
+	# Calculate the function value
+	value : torch.Tensor = f(*values)
 
-    # Calculate the uncertainty using the formula for error propagation
-    value.backward()
-    uncertainty = torch.sqrt(sum((uncertainty * value.grad)**2 for uncertainty, value in zip(uncertainties, values)))
+	# Calculate the uncertainty using the formula for error propagation
+	value.backward()
+	uncertainties = torch.Tensor([(uncertainty * value.grad) for uncertainty, value in zip(uncertainties, values)])
+	uncertainty = torch.sqrt(torch.sum(uncertainties ** 2))
+	calc.uncertainties = torch.abs(uncertainties)
 
-    return Value(value.detach().numpy(), uncertainty.detach().numpy())
+	return Value(value.detach().numpy(), uncertainty.detach().numpy())
