@@ -8,8 +8,15 @@ class Value:
 		self.value = float(value)
 		self.uncertainty = float(uncertainty)
 
-	def __repr__(self) -> str:
+	def __str__(self) -> str:
 		return f'{self.value} ± {self.uncertainty}'
+
+	def __repr__(self) -> str:
+		return f'Value({self.value}, {self.uncertainty})'
+
+	def relative_uncertainty(self) -> float:
+		'''calculate the relative uncertainty'''
+		return self.uncertainty / self.value
 
 def margin_of_error(value : np.array) -> float:
 	'''calculate Margin of Error (the uncertainty associated with random error), using the t-distribution'''
