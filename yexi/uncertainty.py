@@ -1,56 +1,90 @@
 import numpy as np
 import scipy.stats
 import torch
+
 confidence = 0.95
-class Value:
-	'''A measured or calculated value, with uncertainty.'''
-	def __init__(self, value, uncertainty=0):
-		self.value = float(value)
-		self.uncertainty = float(uncertainty)
 
-	def __str__(self) -> str:
-		return f'{self.value} ± {self.uncertainty}'
+def measure(value, tolerance=0, factor=1, intercept=0):
+	"""Measure a value with uncertainty, returning a torch.Tensor with an extra uncertainty attribute."""
+	systematic_error = tolerance * confidence	# assuming the data is uniformly distributed within the tolerance
 
-	def __repr__(self) -> str:
-		return f'Value({self.value}, {self.uncertainty})'
+	if isinstance(value, (list, np.ndarray)):
+		ME = margin_of_error(np.array(value))
+		mean_value = (np.mean(value) - intercept) * factor
+		uncertainty = np.sqrt(ME**2 + systematic_error**2) * factor
+	else:
+		mean_value = (value - intercept) * factor
+		uncertainty = systematic_error * factor
 
-	def relative_uncertainty(self) -> float:
-		'''calculate the relative uncertainty'''
-		return self.uncertainty / self.value
+	# Create a Tensor object and attach the uncertainty as an attribute
+	result_tensor = torch.tensor(mean_value, dtype=torch.float, requires_grad=True)
+	setattr(result_tensor, 'uncertainty', uncertainty)
 
-def margin_of_error(value : np.array) -> float:
-	'''calculate Margin of Error (the uncertainty associated with random error), using the t-distribution'''
+	print(f'Measured Value {mean_value} ± {uncertainty}')
+	return result_tensor
+
+def margin_of_error(value):
+	"""Calculate Margin of Error (the uncertainty associated with random error), using the t-distribution."""
 	return scipy.stats.t.ppf((1 + confidence) / 2, len(value) - 1) * np.std(value, ddof=1) / np.sqrt(len(value))
 
-def measure(value : np.array, tolerance=0, factor=1, intercept=0) -> Value:
-	'''measure a value with uncertainty, assuming the data is uniformly distributed within the tolerance'''
-	systematic_error = tolerance * confidence
-	if hasattr(value, '__len__'):
-		ME = margin_of_error(value)
-		return Value((np.mean(value) - intercept) * factor, np.sqrt(ME**2 + systematic_error**2) * factor)
-	else:
-		return Value((value - intercept) * factor, systematic_error * factor)
+def uncertainty(result, inputs):
+	"""Calculate the uncertainty of a result based on the uncertainties of its inputs."""
+	if not all(hasattr(input, 'uncertainty') for input in inputs if isinstance(input, torch.Tensor)):
+		raise ValueError("All inputs must have an 'uncertainty' attribute.")
 
-def calc(f, *args : float | Value) -> Value:
-	'''calculate a function with uncertainty, using torch'''
-	# Convert all arguments to torch tensors
-	values = [
-		torch.tensor(
-			arg.value if isinstance(arg, Value) else arg,
-			requires_grad=True,
-			dtype=float
-		)
-		for arg in args
-	]
-	uncertainties = [torch.tensor(arg.uncertainty if isinstance(arg, Value) else 0) for arg in args]
+	derivatives = []
+	for input in inputs:
+		if isinstance(input, torch.Tensor) and hasattr(input, 'uncertainty'):
+			input.requires_grad_(True)
+			derivative = torch.autograd.grad(outputs=result, inputs=input, retain_graph=True)[0]
+			derivatives.append(input.uncertainty * derivative)
 
-	# Calculate the function value
-	value : torch.Tensor = f(*values)
+	derivatives = torch.tensor(derivatives)
+	total_uncertainty = torch.sqrt(torch.sum(derivatives ** 2))
+	setattr(result, 'uncertainty', total_uncertainty.item())
+	setattr(result, 'contributions', derivatives)
 
-	# Calculate the uncertainty using the formula for error propagation
-	value.backward()
-	uncertainties = torch.Tensor([(uncertainty * value.grad) for uncertainty, value in zip(uncertainties, values)])
-	uncertainty = torch.sqrt(torch.sum(uncertainties ** 2))
-	calc.uncertainties = torch.abs(uncertainties)
+	print(f'Result: {result.item()} ± {total_uncertainty.item()}')
+	return result
 
-	return Value(value.detach().numpy(), uncertainty.detach().numpy())
+def relative_uncertainty(value : torch.Tensor):
+	"""Calculate the relative uncertainty of a value."""
+	if not hasattr(value, 'uncertainty'):
+		raise ValueError("The input must have an 'uncertainty' attribute. Call the `uncertainty` function first.")
+	return value.uncertainty / value.item()
+
+if __name__ == "__main__":
+
+	def repr(value : torch.Tensor):
+		'''Return a string representation of a measured value'''
+		if not hasattr(value, 'uncertainty'):
+			return str(value.item())
+		return f"{value.item()} ± {value.uncertainty}"
+
+	# Test the measure function
+	print("Testing the measure function")
+	x = measure(10, 0.1)
+	y = measure([5,4.9,5.1], 0.1)
+	z = 1
+	print(x)
+	print(x.uncertainty)
+	print(repr(x))
+
+	# Test the uncertainty function
+	print("Testing the uncertainty function")
+	r = x ** 2 + y - z
+	r = uncertainty(r, [x, y])
+	print(repr(r))
+
+	# Test factor and intercept
+	print("Testing the factor and intercept")
+	x = measure(10, 0.1, factor=0.1, intercept=0.2)
+	y = measure([5,4.9,5.1], 0.1, factor=10, intercept=0.2)
+
+	# Test uncertainty contributions
+	print("Testing uncertainty contributions")
+	x = measure(10, 0.1)
+	y = measure(10, 0.1)
+	r = x ** 2 + y
+	r = uncertainty(r, [x, y])
+	print(r.contributions)

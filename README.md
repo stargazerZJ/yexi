@@ -10,19 +10,48 @@
 - Install the required packages by running `pip install -r requirements.txt`.
 - Copy the `yexi` folder to your project.
 
-## Usage
+## Basic Usage
 ```python
 >>> import yexi
->>> x = yexi.measure(10, 0.1)		# a measured value 10 with tolerance 0.1
->>> x
-10.0 ± 0.095
->>> def f(x, y):
-...     return x**2 + y
-...
->>> y = 5
->>> yexi.calc(f, x, y)				# calculate the result of f(x, y), with uncertainty
-105.0 ± 1.899999976158142
->>> yexi.measure([1,0.9,1.1],0.05)	# multiple measurements
-1.0 ± 0.25291431694161404
+>>> x = yexi.measure(10, 0.1)      # a measured value 10 with tolerance 0.1
+Measured Value 10.0 ± 0.095
+>>> x.uncertainty                  # get the uncertainty
+0.095
+>>> y = yexi.measure([5,4.9,5.1], 0.1) # multiple measurements
+>>> z = x ** 2 + y - 1
+>>> z                              # calculating with measured values
+Tensor(104.0)                      # the value is available immediately
+>>> yexi.uncertainty(z, [x, y])    # to get the uncertainty, use the uncertainty function with all the measured values
+Result: 104.0 ± 1.9185240268707275
+Tensor(104.0)
+>>> z.uncertainty # Note that the `uncertainty` attribute is available only after calling the `uncertainty` function
+1.9185240268707275
 ```
 Note that the default confidence level is 0.95. You can change the confidence level by setting `yexi.uncertainty.confidence` to a value between 0 and 1, which takes effect on all subsequent measurements.
+## Advanced Usage
+**Factor and Intercept:**
+```python
+>>> x = yexi.measure(10, 0.1, factor=10, intercept=0.2)
+Measured Value 98.0 ± 0.95
+>>> y = yexi.measure([5,4.9,5.1], 0.1, factor=10, intercept=0.2)
+Measured Value 48.0 ± 2.6595939861949365
+```
+The value of `x` is calculated as `(10 - 0.2) * 10 = 98`.
+**relative uncertainty:**
+```python
+x = yexi.measure(10, 0.1)
+yexi.relative_uncertainty(x) # 0.0095
+y = x + 1
+yexi.uncertainty(y, [x])
+r = yexi.relative_uncertainty(y) # must be called after the `uncertainty` function
+print(r) # 0.008636363527991554
+```
+**Uncertainty contrubution:**
+```python
+x = measure(10, 0.1)
+y = measure(10, 0.1)
+z = x ** 2 + y
+z = uncertainty(z, [x, y])
+print(z.contributions) # tensor([1.9000, 0.0950])
+```
+The contributions are defined as $\left| \frac{\partial z}{\partial x} u_x \right|$ and $\left| \frac{\partial z}{\partial y} u_y \right|$. They are available only after calling the `uncertainty` function.
