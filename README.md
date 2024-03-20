@@ -55,3 +55,10 @@ z = uncertainty(z, [x, y])
 print(z.contributions) # tensor([1.9000, 0.0950])
 ```
 The contributions are defined as $\left| \frac{\partial z}{\partial x} u_x \right|$ and $\left| \frac{\partial z}{\partial y} u_y \right|$. They are available only after calling the `uncertainty` function.
+**Non-algebraic operations via PyTorch:**
+```python
+import torch
+x = measure(1, 0.1)
+r = torch.sin(x)
+r = uncertainty(r, [x]) # Result: 0.8414709568023682 ± 0.05132872238755226
+```

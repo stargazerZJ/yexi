@@ -88,3 +88,10 @@ if __name__ == "__main__":
 	r = x ** 2 + y
 	r = uncertainty(r, [x, y])
 	print(r.contributions)
+
+	# Test non-algebraic operations
+	print("Testing non-algebraic operations")
+	x = measure(1, 0.1)
+	r = torch.sin(x)
+	r = uncertainty(r, [x])
+	print(repr(r))
